@@ -1,46 +1,148 @@
 package com.example.gramotunes
 
 import android.Manifest
-import android.content.ContentUris
-import android.content.Context
-import android.net.Uri
+import android.animation.ValueAnimator
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
-import android.provider.MediaStore
-import android.view.LayoutInflater
+import android.util.Log
 import android.view.View
-import android.view.ViewGroup
-import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.fragment.NavHostFragment
+import androidx.navigation.ui.setupWithNavController
+import androidx.palette.graphics.Palette
+import com.bumptech.glide.Glide
+import com.bumptech.glide.request.target.CustomTarget
+import com.example.gramotunes.databinding.ActivityMainBinding
+import com.example.gramotunes.ui.view.PlayerBottomSheetFragment
+import com.example.gramotunes.ui.viewmodel.MusicViewmodel
+import com.google.android.material.bottomnavigation.BottomNavigationView
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
-
-data class MusicModel(
-    val id: Long,
-    val title: String,
-    val artist: String,
-    val duration: Long,
-    val uri: Uri
-)
-
+@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var binding: ActivityMainBinding
+    val musicViewmodel: MusicViewmodel by viewModels()
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, 0)
             insets
         }
+        getStoragePermission()
 
+        val navHostFragment =
+            supportFragmentManager.findFragmentById(R.id.navHost) as NavHostFragment
+
+        val navController = navHostFragment.navController
+
+        findViewById<BottomNavigationView>(R.id.bottomNav)
+            .setupWithNavController(navController)
+
+        binding.playerBottomSheet.playerSheet.setOnClickListener {
+            val playerBottomSheetFragment = PlayerBottomSheetFragment()
+            playerBottomSheetFragment.show(supportFragmentManager, playerBottomSheetFragment.tag)
+        }
+        binding.playerBottomSheet.tvTitle.isSelected = true
+        binding.playerBottomSheet.tvArtist.isSelected = true
+        binding.playerBottomSheet.btnPause.setOnClickListener {
+            musicViewmodel.pause()
+            binding.playerBottomSheet.btnPause.visibility = View.GONE
+            binding.playerBottomSheet.btnPlayPause.visibility = View.VISIBLE
+        }
+
+        binding.playerBottomSheet.btnPlayPause.setOnClickListener {
+            musicViewmodel.resume()
+            binding.playerBottomSheet.btnPause.visibility = View.VISIBLE
+            binding.playerBottomSheet.btnPlayPause.visibility = View.GONE
+
+        }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                musicViewmodel.uiState.collect {
+                    Log.d("MusicPlayer", "called")
+                    binding.playerBottomSheet.tvTitle.text = it.title
+                    binding.playerBottomSheet.tvArtist.text = it.artist
+                    Glide.with(binding.playerBottomSheet.ivMiniArt)
+                        .asBitmap()
+                        .load(it.albumArt)
+                        .placeholder(R.drawable.ic_gramatune_placeholder)
+                        .error(R.drawable.ic_gramatune_placeholder)
+                        .into(object : CustomTarget<Bitmap>() {
+
+                            override fun onResourceReady(
+                                resource: Bitmap,
+                                transition: com.bumptech.glide.request.transition.Transition<in Bitmap>?
+                            ) {
+                                binding.playerBottomSheet.ivMiniArt.setImageBitmap(resource)
+                                extractDominantColor(resource) { color ->
+                                    animateMiniPlayerColor(color)
+                                }
+                            }
+
+                            override fun onLoadCleared(placeholder: Drawable?) {
+                            }
+                        })
+                }
+            }
+        }
+    }
+
+
+    private fun animateMiniPlayerColor(targetColor: Int) {
+        val card = binding.playerBottomSheet.playerSheet
+        val currentColor = card.cardBackgroundColor.defaultColor
+
+        val mixedColor = ColorUtils.blendARGB(
+            targetColor,
+            Color.BLACK,
+            0.4f
+        )
+
+        ValueAnimator.ofArgb(currentColor, mixedColor).apply {
+            duration = 400
+            addUpdateListener {
+                card.setCardBackgroundColor(it.animatedValue as Int)
+            }
+            start()
+        }
+    }
+
+
+    fun extractDominantColor(
+        bitmap: Bitmap,
+        onColorReady: (Int) -> Unit
+    ) {
+        Palette.from(bitmap).generate { palette ->
+            val color = palette?.getVibrantColor(
+                palette.getDominantColor(Color.BLACK)
+            ) ?: Color.BLACK
+            onColorReady(color)
+        }
+    }
+
+
+    fun getStoragePermission() {
         ActivityCompat.requestPermissions(
             this,
             arrayOf(
@@ -51,127 +153,10 @@ class MainActivity : AppCompatActivity() {
             ),
             100
         )
-
-        val recyclerView = findViewById<RecyclerView>(R.id.recyclerView)
-        recyclerView.layoutManager = LinearLayoutManager(this)
-
-        val musicList = getLocalMusic(this)
-        recyclerView.adapter = MusicAdapter(musicList){
-            MusicPlayerManager.play(this, it.uri)
-        }
-    }
-
-    fun getLocalMusic(context: Context): List<MusicModel> {
-        val musicList = mutableListOf<MusicModel>()
-
-        val projection = arrayOf(
-            MediaStore.Audio.Media._ID,
-            MediaStore.Audio.Media.TITLE,
-            MediaStore.Audio.Media.ARTIST,
-            MediaStore.Audio.Media.DURATION
-        )
-
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-
-        val cursor = context.contentResolver.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            selection,
-            null,
-            "${MediaStore.Audio.Media.TITLE} ASC"
-        )
-
-        cursor?.use {
-            val idCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val titleCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val durationCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-
-            while (it.moveToNext()) {
-                val id = it.getLong(idCol)
-                val title = it.getString(titleCol)
-                val artist = it.getString(artistCol)
-                val duration = it.getLong(durationCol)
-
-                val contentUri = ContentUris.withAppendedId(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id
-                )
-
-                musicList.add(
-                    MusicModel(id, title, artist, duration, contentUri)
-                )
-            }
-        }
-
-        return musicList
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        MusicPlayerManager.release()
     }
 
 }
-
-
-
-class MusicAdapter(
-    private val list: List<MusicModel>,
-    private val onItemClick: (MusicModel) -> Unit
-) : RecyclerView.Adapter<MusicAdapter.MusicViewHolder>() {
-
-    class MusicViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val title: TextView = view.findViewById(R.id.tvTitle)
-        val artist: TextView = view.findViewById(R.id.tvArtist)
-    }
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MusicViewHolder {
-        val view = LayoutInflater.from(parent.context)
-            .inflate(R.layout.item_music, parent, false)
-        return MusicViewHolder(view)
-    }
-
-    override fun onBindViewHolder(holder: MusicViewHolder, position: Int) {
-        val music = list[position]
-        holder.title.text = music.title
-        holder.artist.text = music.artist
-        holder.itemView.setOnClickListener {
-            onItemClick(music)
-        }
-    }
-
-    override fun getItemCount() = list.size
-}
-
-
-object MusicPlayerManager {
-
-    private var player: ExoPlayer? = null
-
-    fun getPlayer(context: Context): ExoPlayer {
-        if (player == null) {
-            player = ExoPlayer.Builder(context.applicationContext).build()
-        }
-        return player!!
-    }
-
-    fun play(context: Context, uri: Uri) {
-        val player = getPlayer(context)
-        val mediaItem = MediaItem.fromUri(uri)
-
-        player.setMediaItem(mediaItem)
-        player.prepare()
-        player.play()
-    }
-
-    fun stop() {
-        player?.stop()
-    }
-
-    fun release() {
-        player?.release()
-        player = null
-    }
-}
-
-
