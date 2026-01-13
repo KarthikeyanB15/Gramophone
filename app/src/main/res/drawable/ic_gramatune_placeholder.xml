@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Background circle -->
+    <path
+        android:fillColor="#1E1E2E"
+        android:pathData="M50,50m-50,0a50,50 0,1 1,100 0a50,50 0,1 1,-100 0" />
+
+    <!-- Inner disc -->
+    <path
+        android:fillColor="#2A2A3D"
+        android:pathData="M50,50m-35,0a35,35 0,1 1,70 0a35,35 0,1 1,-70 0" />
+
+    <!-- Center hole -->
+    <path
+        android:fillColor="#1E1E2E"
+        android:pathData="M50,50m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+
+    <!-- Music note -->
+    <path
+        android:fillColor="#8BE9FD"
+        android:pathData="M58,30v22c0,3.3 -2.7,6 -6,6s-6,-2.7 -6,-6 2.7,-6 6,-6c1,0 2,0.3 3,0.8V30h3z" />
+</vector>
