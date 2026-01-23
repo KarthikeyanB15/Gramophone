@@ -6,11 +6,15 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.gramotunes.databinding.FragmentHomeBinding
 import com.example.gramotunes.ui.adapter.MusicListAdapter
 import com.example.gramotunes.ui.viewmodel.MusicViewmodel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class HomeFragment : Fragment() {
@@ -31,10 +35,16 @@ class HomeFragment : Fragment() {
         val recyclerView = binding.recyclerView
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
 
-        val musicList = musicViewmodel.getLocalMusic()
-
-        recyclerView.adapter = MusicListAdapter(musicList) {
+        val adapter = MusicListAdapter {
             musicViewmodel.play(it)
+        }
+        recyclerView.adapter = adapter
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                musicViewmodel.musicList.collect { list ->
+                    adapter.submitList(list)
+                }
+            }
         }
     }
 

@@ -22,6 +22,7 @@ import com.bumptech.glide.request.target.CustomTarget
 import com.example.gramotunes.R
 import com.example.gramotunes.databinding.PlayerScreenBinding
 import com.example.gramotunes.ui.viewmodel.MusicViewmodel
+import com.example.gramotunes.utils.MusicUtils
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
@@ -49,7 +50,7 @@ class PlayerBottomSheetFragment : BottomSheetDialogFragment() {
                 musicViewmodel.uiState.collect {
                     Glide.with(binding.albumImage)
                         .asBitmap()
-                        .load(it.albumArt)
+                        .load(MusicUtils.getAlbumArtUri(it.albumId))
                         .placeholder(R.drawable.ic_gramatune_placeholder)
                         .error(R.drawable.ic_gramatune_placeholder)
                         .into(object : CustomTarget<Bitmap>() {

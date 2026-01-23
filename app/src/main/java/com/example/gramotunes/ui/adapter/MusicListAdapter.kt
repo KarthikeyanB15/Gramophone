@@ -5,15 +5,17 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.example.gramotunes.R
-import com.example.gramotunes.data.MusicListModel
+import com.example.gramotunes.data.model.MusicListModel
+import com.example.gramotunes.utils.MusicUtils
 
 class MusicListAdapter(
-    private val list: List<MusicListModel>,
     private val onItemClick: (MusicListModel) -> Unit
-) : RecyclerView.Adapter<MusicListAdapter.MusicViewHolder>() {
+) : ListAdapter<MusicListModel, MusicListAdapter.MusicViewHolder>(DiffCallback()) {
 
     class MusicViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val title: TextView = view.findViewById(R.id.tvTitle)
@@ -28,7 +30,7 @@ class MusicListAdapter(
     }
 
     override fun onBindViewHolder(holder: MusicViewHolder, position: Int) {
-        val music = list[position]
+        val music = getItem(position)
         holder.title.text = music.title
         holder.artist.text = music.artist
         holder.itemView.setOnClickListener {
@@ -36,11 +38,24 @@ class MusicListAdapter(
         }
 
         Glide.with(holder.image.context)
-            .load(music.albumArt) // Bitmap or Uri
+            .load(MusicUtils.getAlbumArtUri(music.albumId))
             .placeholder(R.drawable.ic_gramatune_placeholder)
             .error(R.drawable.ic_gramatune_placeholder)
             .into(holder.image)
     }
 
-    override fun getItemCount() = list.size
 }
+
+class DiffCallback : DiffUtil.ItemCallback<MusicListModel>() {
+
+    override fun areItemsTheSame(
+        oldItem: MusicListModel,
+        newItem: MusicListModel
+    ): Boolean = oldItem.id == newItem.id
+
+    override fun areContentsTheSame(
+        oldItem: MusicListModel,
+        newItem: MusicListModel
+    ): Boolean = oldItem == newItem
+}
+
