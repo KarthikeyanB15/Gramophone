@@ -14,11 +14,12 @@
         app:navGraph="@navigation/main_nav_graph" />
 
     <include
-        android:id="@+id/playerBottomSheet"
+        android:id="@+id/miniPlayerCard"
         layout="@layout/mini_player_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="8dp"
+        android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@id/bottomNav"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />

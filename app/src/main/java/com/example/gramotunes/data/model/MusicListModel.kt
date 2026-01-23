@@ -1,6 +1,5 @@
-package com.example.gramotunes.data
+package com.example.gramotunes.data.model
 
-import android.graphics.Bitmap
 import android.net.Uri
 
 data class MusicListModel(
@@ -9,5 +8,5 @@ data class MusicListModel(
     val artist: String = "",
     val duration: Long = 0L,
     val uri: Uri = Uri.EMPTY,
-    val albumArt: Bitmap? = null
+    val albumId: Long = 0L
 )

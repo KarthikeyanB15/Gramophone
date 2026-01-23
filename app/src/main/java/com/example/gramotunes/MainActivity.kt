@@ -7,12 +7,12 @@ import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -27,6 +27,7 @@ import com.bumptech.glide.request.target.CustomTarget
 import com.example.gramotunes.databinding.ActivityMainBinding
 import com.example.gramotunes.ui.view.PlayerBottomSheetFragment
 import com.example.gramotunes.ui.viewmodel.MusicViewmodel
+import com.example.gramotunes.utils.MusicUtils
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -36,6 +37,13 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     val musicViewmodel: MusicViewmodel by viewModels()
+
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                musicViewmodel.loadMusic()
+            }
+        }
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,34 +66,32 @@ class MainActivity : AppCompatActivity() {
         findViewById<BottomNavigationView>(R.id.bottomNav)
             .setupWithNavController(navController)
 
-        binding.playerBottomSheet.playerSheet.setOnClickListener {
-            val playerBottomSheetFragment = PlayerBottomSheetFragment()
-            playerBottomSheetFragment.show(supportFragmentManager, playerBottomSheetFragment.tag)
+        binding.miniPlayerCard.playerSheet.setOnClickListener {
+            val miniPlayerCardFragment = PlayerBottomSheetFragment()
+            miniPlayerCardFragment.show(supportFragmentManager, miniPlayerCardFragment.tag)
         }
-        binding.playerBottomSheet.tvTitle.isSelected = true
-        binding.playerBottomSheet.tvArtist.isSelected = true
-        binding.playerBottomSheet.btnPause.setOnClickListener {
+        binding.miniPlayerCard.tvTitle.isSelected = true
+        binding.miniPlayerCard.tvArtist.isSelected = true
+        binding.miniPlayerCard.btnPause.setOnClickListener {
             musicViewmodel.pause()
-            binding.playerBottomSheet.btnPause.visibility = View.GONE
-            binding.playerBottomSheet.btnPlayPause.visibility = View.VISIBLE
+            binding.miniPlayerCard.btnPause.visibility = View.GONE
+            binding.miniPlayerCard.btnPlayPause.visibility = View.VISIBLE
         }
 
-        binding.playerBottomSheet.btnPlayPause.setOnClickListener {
+        binding.miniPlayerCard.btnPlayPause.setOnClickListener {
             musicViewmodel.resume()
-            binding.playerBottomSheet.btnPause.visibility = View.VISIBLE
-            binding.playerBottomSheet.btnPlayPause.visibility = View.GONE
-
+            binding.miniPlayerCard.btnPause.visibility = View.VISIBLE
+            binding.miniPlayerCard.btnPlayPause.visibility = View.GONE
         }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 musicViewmodel.uiState.collect {
-                    Log.d("MusicPlayer", "called")
-                    binding.playerBottomSheet.tvTitle.text = it.title
-                    binding.playerBottomSheet.tvArtist.text = it.artist
-                    Glide.with(binding.playerBottomSheet.ivMiniArt)
+                    binding.miniPlayerCard.tvTitle.text = it.title
+                    binding.miniPlayerCard.tvArtist.text = it.artist
+                    Glide.with(binding.miniPlayerCard.ivMiniArt)
                         .asBitmap()
-                        .load(it.albumArt)
+                        .load(MusicUtils.getAlbumArtUri(it.albumId))
                         .placeholder(R.drawable.ic_gramatune_placeholder)
                         .error(R.drawable.ic_gramatune_placeholder)
                         .into(object : CustomTarget<Bitmap>() {
@@ -94,7 +100,7 @@ class MainActivity : AppCompatActivity() {
                                 resource: Bitmap,
                                 transition: com.bumptech.glide.request.transition.Transition<in Bitmap>?
                             ) {
-                                binding.playerBottomSheet.ivMiniArt.setImageBitmap(resource)
+                                binding.miniPlayerCard.ivMiniArt.setImageBitmap(resource)
                                 extractDominantColor(resource) { color ->
                                     animateMiniPlayerColor(color)
                                 }
@@ -106,11 +112,42 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                musicViewmodel.showMiniPlayer.collect { show ->
+                    if (show && binding.miniPlayerCard.playerSheet.visibility != View.VISIBLE) {
+                        showMiniPlayer()
+                    }
+                }
+            }
+        }
     }
 
+    private fun showMiniPlayer() {
+        val view = binding.miniPlayerCard.playerSheet
+
+        view.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+
+        val height = view.measuredHeight.toFloat()
+
+        view.translationY = height
+        view.alpha = 0f
+        view.visibility = View.VISIBLE
+
+        view.animate()
+            .translationY(0f)
+            .alpha(1f)
+            .setDuration(300)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+    }
 
     private fun animateMiniPlayerColor(targetColor: Int) {
-        val card = binding.playerBottomSheet.playerSheet
+        val card = binding.miniPlayerCard.playerSheet
         val currentColor = card.cardBackgroundColor.defaultColor
 
         val mixedColor = ColorUtils.blendARGB(
@@ -142,17 +179,14 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    fun getStoragePermission() {
-        ActivityCompat.requestPermissions(
-            this,
-            arrayOf(
-                if (Build.VERSION.SDK_INT >= 33)
-                    Manifest.permission.READ_MEDIA_AUDIO
-                else
-                    Manifest.permission.READ_EXTERNAL_STORAGE
-            ),
-            100
-        )
+    private fun getStoragePermission() {
+        val permission =
+            if (Build.VERSION.SDK_INT >= 33)
+                Manifest.permission.READ_MEDIA_AUDIO
+            else
+                Manifest.permission.READ_EXTERNAL_STORAGE
+
+        permissionLauncher.launch(permission)
     }
 
     override fun onDestroy() {
